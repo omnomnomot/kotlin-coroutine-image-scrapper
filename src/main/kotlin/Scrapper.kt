@@ -4,6 +4,8 @@ import java.nio.file.Files
 import java.nio.file.Paths
 import kotlin.random.Random
 
+
+
 fun main(args: Array<String>) {
     val spec =
         "https://stock.adobe.com/ie/collections/Kqy5H45lnKzkC5I8JGFXYVwr2ltNwMe7?filters%5Bcontent_type%3Aphoto%5D=1"
@@ -11,10 +13,18 @@ fun main(args: Array<String>) {
 
     val result = client.readText()
 
-    handleResult(result)
+    val idCounts = HashMap<String, Int>()
+
+    handleResult(idCounts, result)
+
+    idCounts.entries
+        .sortedBy { it.key }
+        .forEach { println("${it.key} -> \t\t ${it.value}") }
 }
 
-fun handleResult(result: String) = runBlocking {
+fun handleResult(idCounts:HashMap<String, Int>, result: String) = runBlocking {
+
+
     println(result)
 
     val regex = "\\<img.*src=\"(.*?)\".*\\>"
@@ -25,23 +35,37 @@ fun handleResult(result: String) = runBlocking {
     println("matches: $matches.")
     matches.map { it.groupValues[1] }
         .filter { it.startsWith("https") }
-        .forEach {
-            download(it)
-        }
+        .forEachIndexed { index, url -> download(index, url, idCounts) }
 
 }
 
-fun CoroutineScope.download(url: String) {
-
+fun CoroutineScope.download(
+    index: Int,
+    url: String,
+    idCounts: HashMap<String, Int>
+) {
     launch {
         withContext(Dispatchers.Default) {
+            val threadId1 = "Default-${Thread.currentThread().id}"
+            addCount(idCounts, index, threadId1)
+
             val imageBytes = getImage(url)
+
+
             withContext(Dispatchers.IO) {
                 writeToFile(imageBytes)
+
+                val threadId2 = "IO-${Thread.currentThread().id}"
+                addCount(idCounts, index, threadId2)
             }
         }
     }
+}
 
+
+fun addCount(ids: HashMap<String, Int>, index:Int, threadId1:String){
+    println("Download  $index \ton $threadId1")
+    ids[threadId1] = (ids[threadId1]?:0)+1
 }
 
 fun writeToFile(imageBytes: ByteArray) {
